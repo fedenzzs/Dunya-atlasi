@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Dünya Atlası</title>
+
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+*{box-sizing:border-box}
+html,body,#map{margin:0;width:100%;height:100%;
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+
+#map{background:#dbeafe}
+
+.top{
+position:fixed;z-index:1000;top:10px;left:10px;right:10px;
+display:flex;gap:8px;align-items:center;pointer-events:none
+}
+
+.top>*{pointer-events:auto}
+
+.title,.search,.button,.panel{
+background:white;border:1px solid #ddd;
+box-shadow:0 3px 15px #0002;border-radius:13px
+}
+
+.title{padding:11px 14px;font-weight:700}
+.search{height:44px;flex:1;max-width:520px;padding:0 13px;font-size:16px}
+.button{height:44px;padding:0 15px;font-weight:700;font-size:15px}
+
+.panel{
+position:fixed;z-index:2000;right:10px;top:62px;
+width:min(390px,calc(100vw - 20px));
+max-height:calc(100vh - 75px);overflow:auto;
+padding:15px;display:none
+}
+
+.panel.open{display:block}
+
+.panel h2{margin:0 0 5px}
+.info{font-size:12px;color:#666;margin-bottom:10px}
+
+.group{border-top:1px solid #eee;padding:10px 0}
+.group h3{font-size:14px;margin:0 0 6px}
+
+label{
+display:flex;align-items:center;gap:9px;
+padding:5px 0;font-size:14px
+}
+
+input[type=checkbox]{width:18px;height:18px}
+
+@media(max-width:600px){
+.title{display:none}
+.top{top:8px}
+.search{max-width:none}
+}
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div class="top">
+<div class="title">🌍 Dünya Atlası</div>
+<input id="search" class="search" placeholder="Ülke veya şehir ara...">
+<button id="btn" class="button">☰ Katmanlar</button>
+</div>
+
+<div id="panel" class="panel">
+
+<h2>🌍 Katmanlar</h2>
+
+<div class="info">
+Yakınlaştırmak katmanları otomatik açmaz.
+İstediğin kadar katmanı aynı anda seçebilirsin.
+</div>
+
+<div class="group">
+<h3>🗺️ Siyasi</h3>
+<label><input type="checkbox" data-id="countries"> Ülkeler</label>
+<label><input type="checkbox" data-id="admin1"> İller / eyaletler</label>
+<label><input type="checkbox" data-id="admin2"> İlçeler / county</label>
+<label><input type="checkbox" data-id="capitals"> Başkentler</label>
+</div>
+
+<div class="group">
+<h3>🏔️ Fiziki coğrafya</h3>
+<label><input type="checkbox" data-id="ocean"> Okyanuslar</label>
+<label><input type="checkbox" data-id="marine"> Denizler / körfezler</label>
+<label><input type="checkbox" data-id="rivers"> Nehirler</label>
+<label><input type="checkbox" data-id="lakes"> Göller</label>
+<label><input type="checkbox" data-id="mountains"> Dağlar / yükselti</label>
+<label><input type="checkbox" data-id="regions"> Fiziki bölgeler</label>
+</div>
+
+<div class="group">
+<h3>🚢 Ulaşım</h3>
+<label><input type="checkbox" data-id="ports"> Limanlar</label>
+<label><input type="checkbox" data-id="airports"> Havaalanları</label>
+<label><input type="checkbox" data-id="roads"> Karayolları</label>
+<label><input type="checkbox" data-id="rail"> Demiryolları</label>
+</div>
+
+<div class="group">
+<h3>🏙️ Yerleşim</h3>
+<label><input type="checkbox" data-id="cities"> Büyük şehirler</label>
+<label><input type="checkbox" data-id="urban"> Kentsel alanlar</label>
+</div>
+
+<div class="group">
+<h3>🌦️ Tematik</h3>
+<label><input type="checkbox" data-id="population"> Nüfus yoğunluğu</label>
+<label><input type="checkbox" data-id="climate"> İklim</label>
+<label><input type="checkbox" data-id="rainfall"> Yağış</label>
+<label><input type="checkbox" data-id="earthquakes"> Deprem kuşakları</label>
+<label><input type="checkbox" data-id="currents"> Okyanus akıntıları</label>
+<label><input type="checkbox" data-id="worldregions"> Dünya bölgeleri</label>
+</div>
+
+<div class="group">
+<h3>👥 Beşerî coğrafya</h3>
+<label><input type="checkbox" data-id="tourism"> Turizm şehirleri</label>
+<label><input type="checkbox" data-id="religion"> Dini merkezler</label>
+<label><input type="checkbox" data-id="mining"> Madencilik</label>
+<label><input type="checkbox" data-id="industry"> Sanayi</label>
+<label><input type="checkbox" data-id="trade"> Ticaret</label>
+<label><input type="checkbox" data-id="education"> Eğitim</label>
+<label><input type="checkbox" data-id="culture"> Kültür bölgeleri</label>
+</div>
+
+<div class="group">
+<h3>⛽ Kaynaklar / tarih</h3>
+<label><input type="checkbox" data-id="oil"> Petrol</label>
+<label><input type="checkbox" data-id="gas"> Doğal gaz</label>
+<label><input type="checkbox" data-id="civilizations"> İlk uygarlıklar</label>
+</div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+const map=L.map("map",{
+worldCopyJump:true,
+zoomControl:true
+}).setView([20,0],2);
+
+L.tileLayer(
+"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+{
+maxZoom:19,
+attribution:"© OpenStreetMap contributors"
+}).addTo(map);
+
+
+const BASE=
+"https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/";
+
+
+const URLS={
+
+countries:"ne_10m_admin_0_countries.geojson",
+admin1:"ne_10m_admin_1_states_provinces.geojson",
+admin2:"ne_10m_admin_2_counties.geojson",
+cities:"ne_10m_populated_places_simple.geojson",
+rivers:"ne_10m_rivers_lake_centerlines.geojson",
+lakes:"ne_10m_lakes.geojson",
+ports:"ne_10m_ports.geojson",
+airports:"ne_10m_airports.geojson",
+marine:"ne_10m_geography_marine_polys.geojson",
+regions:"ne_10m_geography_regions_polys.geojson",
+mountains:"ne_10m_geography_regions_elevation_points.geojson",
+ocean:"ne_10m_ocean.geojson",
+roads:"ne_10m_roads.geojson",
+rail:"ne_10m_railroads.geojson",
+urban:"ne_10m_urban_areas.geojson"
+
+};
+
+
+const loaded={};
+const layers={};
+
+const checkboxes=
+Object.fromEntries(
+[...document.querySelectorAll("[data-id]")]
+.map(x=>[x.dataset.id,x])
+);
+
+
+const MINZOOM={
+countries:1,
+ocean:1,
+marine:2,
+cities:3,
+rivers:3,
+lakes:3,
+mountains:3,
+ports:3,
+admin1:4,
+airports:4,
+roads:5,
+rail:5,
+urban:5,
+regions:2,
+admin2:6
+};
+
+
+function properties(p){
+
+return Object.entries(p||{})
+.filter(([k,v])=>v!==null&&v!==undefined&&v!=="")
+.slice(0,10)
+.map(([k,v])=>
+"<b>"+k+"</b>: "+String(v).slice(0,200))
+.join("<br>");
+
+}
+
+
+function style(id){
+
+if(id==="countries")
+return {color:"#333",weight:1,fillOpacity:.08};
+
+if(id==="admin1")
+return {color:"#555",weight:.7,fillOpacity:0};
+
+if(id==="admin2")
+return {color:"#777",weight:.35,fillOpacity:0};
+
+if(id==="ocean")
+return {color:"#2878b8",weight:1,fillOpacity:.08};
+
+if(id==="marine")
+return {color:"#1769aa",weight:1,fillOpacity:.05};
+
+if(id==="regions")
+return {color:"#996633",weight:1,fillOpacity:.05};
+
+return {color:"#345",weight:1,fillOpacity:.08};
+
+}
+
+
+async function loadGeo(id){
+
+if(loaded[id])return layers[id];
+
+if(!URLS[id])return null;
+
+const response=await fetch(BASE+URLS[id]);
+
+const data=await response.json();
+
+const layer=L.geoJSON(data,{
+
+style:()=>style(id),
+
+pointToLayer:(feature,latlng)=>
+L.circleMarker(latlng,{
+radius:id==="cities"?3:4,
+weight:1,
+fillOpacity:.75
+}),
+
+onEachFeature:(feature,layer)=>{
+layer.bindPopup(
+properties(feature.properties)||"Bilgi bulunamadı"
+);
+}
+
+});
+
+layers[id]=layer;
+loaded[id]=true;
+
+return layer;
+
+}
+
+
+const thematic={
+
+capitals:[
+["Ankara",39.93,32.86],
+["Washington",38.91,-77.04],
+["London",51.51,-.13],
+["Paris",48.86,2.35],
+["Berlin",52.52,13.40],
+["Tokyo",35.68,139.69],
+["Beijing",39.90,116.40],
+["Moscow",55.75,37.62],
+["Cairo",30.04,31.24],
+["Brasilia",-15.79,-47.88]
+],
+
+tourism:[
+["Istanbul",41.01,28.98],
+["Paris",48.86,2.35],
+["Rome",41.90,12.50],
+["New York",40.71,-74.01],
+["Dubai",25.20,55.27],
+["Tokyo",35.68,139.69],
+["Barcelona",41.39,2.17],
+["Bangkok",13.76,100.50]
+],
+
+religion:[
+["Mecca",21.42,39.83],
+["Medina",24.47,39.61],
+["Jerusalem",31.78,35.22],
+["Vatican",41.90,12.45],
+["Varanasi",25.32,83.01]
+],
+
+mining:[
+["Pilbara",-22.5,118.5],
+["Rustenburg",-25.67,27.24],
+["Copperbelt",-13,27],
+["Atacama",-23,-69]
+],
+
+industry:[
+["Ruhr",51.45,7],
+["Yangtze Delta",31.2,121.5],
+["Great Lakes",42.3,-83],
+["Kanto",35.7,139.7]
+],
+
+trade:[
+["Singapore",1.35,103.82],
+["Shanghai",31.23,121.47],
+["Rotterdam",51.92,4.48],
+["Dubai",25.20,55.27],
+["Hong Kong",22.32,114.17]
+],
+
+education:[
+["Oxford",51.75,-1.25],
+["Cambridge",52.20,.12],
+["Boston",42.36,-71.06],
+["Tokyo",35.68,139.69]
+],
+
+culture:[
+["Mediterranean",38,18],
+["Andean",-15,-72],
+["West Africa",10,-5],
+["South Asia",23,78]
+],
+
+oil:[
+["Persian Gulf",27,51],
+["West Siberia",61,75],
+["Gulf of Mexico",25,-90],
+["Arabian Peninsula",25,48]
+],
+
+gas:[
+["West Siberia",62,75],
+["North Sea",57,3],
+["Qatar",25.3,51.2],
+["Caspian",40,50]
+],
+
+civilizations:[
+["Mesopotamia",33,44],
+["Ancient Egypt",27,30],
+["Indus Valley",27,70],
+["Yellow River",35,114],
+["Mesoamerica",19,-96],
+["Andes",-13,-72]
+],
+
+climate:[
+["Tropical",5,20],
+["Desert",25,15],
+["Mediterranean",37,15],
+["Temperate",45,10],
+["Polar",75,0]
+],
+
+rainfall:[
+["Equatorial",0,20],
+["Monsoon",15,100],
+["Dry belt",25,30],
+["Temperate",45,-20]
+],
+
+earthquakes:[
+["Pacific Ring of Fire",0,-150],
+["Pacific Ring of Fire",35,145],
+["Alpine-Himalayan",35,70]
+],
+
+currents:[
+["Gulf Stream",35,-55],
+["Kuroshio",30,145],
+["Peru Current",-20,-80],
+["Benguela",-20,10]
+],
+
+worldregions:[
+["North America",45,-100],
+["South America",-15,-60],
+["Europe",50,15],
+["North Africa",25,10],
+["Sub-Saharan Africa",-5,25],
+["Middle East",30,45],
+["Central Asia",45,65],
+["South Asia",22,78],
+["East Asia",35,115],
+["Southeast Asia",5,105],
+["Oceania",-25,140]
+]
+
+};
+
+
+function addTheme(id){
+
+if(layers[id]){
+layers[id].addTo(map);
+return;
+}
+
+const group=L.layerGroup();
+
+for(const item of thematic[id]||[]){
+
+const marker=L.marker([item[1],item[2]])
+.bindPopup(
+"<b>"+item[0]+"</b><br>"+
+id+" katmanı"
+);
+
+group.addLayer(marker);
+
+}
+
+layers[id]=group;
+group.addTo(map);
+
+}
+
+
+async function toggle(id){
+
+if(!checkboxes[id])return;
+
+const on=checkboxes[id].checked;
+
+if(!on){
+
+if(layers[id])map.removeLayer(layers[id]);
+
+return;
+}
+
+
+const thematicIDs=[
+"capitals","population","climate","rainfall",
+"earthquakes","currents","worldregions",
+"tourism","religion","mining","industry",
+"trade","education","culture","oil","gas",
+"civilizations"
+];
+
+
+if(thematicIDs.includes(id)){
+
+addTheme(id);
+return;
+
+}
+
+
+const layer=await loadGeo(id);
+
+if(layer && map.getZoom()>=(MINZOOM[id]||1))
+layer.addTo(map);
+
+}
+
+
+document.querySelectorAll("[data-id]")
+.forEach(box=>{
+
+box.addEventListener("change",()=>{
+toggle(box.dataset.id);
+});
+
+});
+
+
+map.on("zoomend",()=>{
+
+for(const id in checkboxes){
+
+if(!checkboxes[id].checked)continue;
+
+if(!layers[id])continue;
+
+const min=MINZOOM[id]||1;
+const visible=map.getZoom()>=min;
+
+if(visible && !map.hasLayer(layers[id]))
+layers[id].addTo(map);
+
+if(!visible && map.hasLayer(layers[id]))
+map.removeLayer(layers[id]);
+
+}
+
+});
+
+
+document.getElementById("btn").onclick=()=>{
+document.getElementById("panel")
+.classList.toggle("open");
+};
+
+
+document.getElementById("search")
+.addEventListener("keydown",async e=>{
+
+if(e.key!=="Enter")return;
+
+const q=e.target.value.trim().toLowerCase();
+
+if(!q)return;
+
+const cities=await loadGeo("cities");
+
+let found=null;
+
+cities.eachLayer(layer=>{
+
+const p=layer.feature?.properties||{};
+
+const text=JSON.stringify(p).toLowerCase();
+
+if(!found && text.includes(q))
+found=layer;
+
+});
+
+if(found){
+
+map.setView(found.getLatLng(),7);
+found.openPopup();
+
+}
+
+});
+
+</script>
+
+</body>
+</html>
